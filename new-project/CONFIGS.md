@@ -17,8 +17,8 @@ if a combination misbehaves.
     "start": "node .output/server/index.mjs",
     "typecheck": "tsgo --noEmit",
     "lint": "eslint .",
-    "format": "biome format --write .",
-    "format:check": "biome format .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "db:generate": "drizzle-kit generate",
@@ -52,7 +52,7 @@ Dev dependencies:
 typescript @typescript/native-preview @types/node @types/react @types/react-dom
 vite @vitejs/plugin-react vitest jiti
 eslint @eslint/js typescript-eslint eslint-plugin-react globals @tanstack/eslint-plugin-router
-@biomejs/biome drizzle-kit
+eslint-config-prettier prettier prettier-plugin-tailwindcss drizzle-kit
 ```
 
 ## tsconfig.json
@@ -113,7 +113,8 @@ Flat config. Ignore `dist`, `.output`, `.tanstack`, `.nitro`,
 `src/routeTree.gen.ts`, `drizzle`. Extend, in order:
 `pluginRouter.configs["flat/recommended"]`, `js/recommended`,
 `tseslint.configs.recommended`, `pluginReact.configs.flat.recommended`,
-`pluginReact.configs.flat["jsx-runtime"]`. Then for `**/*.{ts,tsx}`:
+`pluginReact.configs.flat["jsx-runtime"]`, and `eslint-config-prettier`
+last. Then for `**/*.{ts,tsx}`:
 
 ```ts
 settings: { react: { version: "detect" } },
@@ -131,23 +132,35 @@ rules: {
 
 `jiti` is what lets ESLint load a `.ts` config.
 
-## biome.json
+## .prettierrc and .prettierignore
 
-Formatting only. ESLint keeps linting because Biome has no TanStack Router
-rules. The file must sit at the repo root: Bryan's Neovim only runs Biome when
-it finds `biome.json` there.
+Prettier formats; ESLint lints. Do not add a `biome.json`: Bryan's Neovim
+hands formatting to Biome whenever that file exists at the repo root and
+skips Prettier entirely.
 
 ```json
 {
-  "$schema": "https://biomejs.dev/schemas/latest/schema.json",
-  "files": {
-    "includes": ["**", "!dist", "!.output", "!.tanstack", "!.nitro", "!drizzle", "!src/routeTree.gen.ts"]
-  },
-  "formatter": { "enabled": true, "indentStyle": "space" },
-  "linter": { "enabled": false },
-  "assist": { "actions": { "source": { "organizeImports": "off" } } }
+  "plugins": ["prettier-plugin-tailwindcss"]
 }
 ```
+
+Prettier defaults otherwise. The Tailwind plugin sorts class names in the
+order Tailwind emits them, which is the only formatting decision worth
+automating in this stack.
+
+`.prettierignore`:
+
+```
+dist
+.output
+.tanstack
+.nitro
+drizzle
+src/routeTree.gen.ts
+```
+
+`eslint-config-prettier` goes last in the ESLint config so no lint rule
+argues with the formatter.
 
 ## drizzle.config.ts
 

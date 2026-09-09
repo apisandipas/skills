@@ -12,7 +12,7 @@ drop what the app does not need.
 ├── .env.example             # every key env.ts requires, values blank
 ├── .envrc                   # `use nix`
 ├── .github/workflows/ci.yml
-├── biome.json               # formatter only
+├── .prettierrc, .prettierignore
 ├── components.json          # shadcn
 ├── db/<app>.sql             # pg_dump written by `db-dump` in the nix shell
 ├── docker-compose.dev.yml   # Postgres for machines without nix

@@ -1,6 +1,6 @@
 ---
 name: new-project
-description: Scaffold a new full-stack TypeScript web app the way Bryan builds them - TanStack Start (Router, Query, Form, Table) on React 19, Better Auth, Drizzle on Postgres, Tailwind v4 with shadcn, Vitest, ESLint plus Biome formatting, a nix dev shell for Postgres, and a feature-slice layout. Use when asked to start, bootstrap, or scaffold a new app or project, or to add a CRUD feature to an app that already follows this layout.
+description: Scaffold a new full-stack TypeScript web app the way Bryan builds them - TanStack Start (Router, Query, Form, Table) on React 19, Better Auth, Drizzle on Postgres, Tailwind v4 with shadcn, Vitest, ESLint plus Prettier, a nix dev shell for Postgres, and a feature-slice layout. Use when asked to start, bootstrap, or scaffold a new app or project, or to add a CRUD feature to an app that already follows this layout.
 ---
 
 # new-project
@@ -20,7 +20,7 @@ three:
   schema to routes to tests. Use this on its own when adding a feature to an
   existing app.
 - [CONFIGS.md](CONFIGS.md) - every config file: package.json scripts,
-  tsconfig, vite, vitest, eslint, biome, drizzle, env example, nix shell,
+  tsconfig, vite, vitest, eslint, prettier, drizzle, env example, nix shell,
   docker-compose, GitHub Actions.
 
 ## The stack
@@ -39,8 +39,8 @@ three:
 | Styling | Tailwind v4, shadcn (base-luma style, base-ui primitives), lucide icons | Theme tokens as CSS variables in `src/styles.css` |
 | Fonts | `@fontsource-variable/*` | Imported in `styles.css` |
 | Tests | Vitest, node environment | Server functions tested against a mocked `db`; no component tests by default |
-| Lint | ESLint flat config with typescript-eslint, react, and `@tanstack/eslint-plugin-router` | Lint only |
-| Format | Biome, formatter only | Bryan's Neovim runs Biome when `biome.json` exists, otherwise falls back |
+| Lint | ESLint flat config with typescript-eslint, react, `@tanstack/eslint-plugin-router`, `eslint-config-prettier` last | Lint only |
+| Format | Prettier with `prettier-plugin-tailwindcss` | Never add a `biome.json`: Bryan's Neovim would switch to Biome and skip Prettier |
 | Typecheck | `tsgo` from `@typescript/native-preview` | `tsc` fallback is fine |
 | Dev DB | Postgres from a nix shell, data under `.direnv/` | `docker-compose.dev.yml` as the non-nix alternative |
 | Storage (optional) | Backblaze B2 through the S3 SDK | Presigned PUT, `HEAD` to verify before trusting a key |
@@ -117,7 +117,7 @@ Work through these in order. Each step should leave `npm run check` passing.
   session, and `createServerFn` with a builder that runs the validator then
   the handler. Service tests then call server functions directly.
 - **Generated files are committed and ignored by tools.** `src/routeTree.gen.ts`
-  and `drizzle/` are in git; both are in the ESLint and Biome ignore lists.
+  and `drizzle/` are in git; both are in the ESLint and Prettier ignore lists.
 - **Server-only code stays out of client bundles.** `src/lib/db`,
   `src/lib/auth/index.ts`, `src/lib/storage`, and `src/lib/env` are imported
   only from server functions and route `server` handlers. The client talks to
@@ -132,7 +132,8 @@ closette itself.
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, and an `include`.
 - `package.json` has no `lint`, `format`, `typecheck`, `check`, or `start`
   script, and carries a leftover `"main": "index.js"` and `"license": "ISC"`.
-- No formatter config, so Neovim's Biome never runs there.
+- No formatter config, so format-on-save in Neovim falls back to the
+  language server instead of Prettier.
 - `.env.example` lists three variables while `src/lib/env.ts` requires eight.
 - Two auth guards: `_protected.tsx` and `dashboard/route.tsx` both check the
   session, and the dashboard one drops the `redirect` search param. One guard
