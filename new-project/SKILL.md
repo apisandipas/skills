@@ -130,9 +130,10 @@ closette itself.
 
 - `tsconfig.json` has only `strictNullChecks`. The scaffold uses `strict`,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, and an `include`.
-- `package.json` has no `typecheck` or `start` script, and carries a leftover
-  `"main": "index.js"` and `"license": "ISC"`. (`lint`, `format`,
-  `format:check`, `check`, Prettier, CI, and a README were added 2026-09-09.)
+- `package.json` has no `start` script and carries a leftover
+  `"main": "index.js"` and `"license": "ISC"`. (`typecheck`, `lint`,
+  `format`, `format:check`, `check`, Prettier, CI, and a README were all in
+  place by 2026-09-09.)
 - `.env.example` lists three variables while `src/lib/env.ts` requires eight.
 - Two auth guards: `_protected.tsx` and `dashboard/route.tsx` both check the
   session, and the dashboard one drops the `redirect` search param. One guard

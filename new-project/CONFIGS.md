@@ -302,8 +302,8 @@ jobs:
 ```
 
 Steps mirror `npm run check` so a local pass predicts a green build. Add a
-Postgres service only if integration tests appear. closette's workflow is the
-same minus the typecheck step, because its tsconfig predates strict mode.
+Postgres service only if integration tests appear. closette's workflow is
+identical; its `typecheck` script runs `tsc --noEmit` rather than `tsgo`.
 
 ## README.md
 
