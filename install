@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# Symlink a skill from this repo into a Claude Code skills directory.
+#
+#   ./install <skill> global          -> ~/.claude/skills/<skill>
+#   ./install <skill> <project-path>  -> <project-path>/.claude/skills/<skill>
+#
+# The link points at the checkout, so editing a skill here updates every
+# place it is installed. Re-running is a no-op if the link is already right,
+# and an error if something else is already in the way.
+
+set -euo pipefail
+
+usage() {
+  echo "usage: $0 <skill> (global | <project-path>)" >&2
+  exit 2
+}
+
+[ $# -eq 2 ] || usage
+
+skill=$1
+target=$2
+
+repo=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+src="$repo/$skill"
+
+if [ ! -f "$src/SKILL.md" ]; then
+  echo "error: no skill named '$skill' in $repo (expected $src/SKILL.md)" >&2
+  echo "available:" >&2
+  for d in "$repo"/*/; do
+    [ -f "$d/SKILL.md" ] && echo "  $(basename "$d")" >&2
+  done
+  exit 1
+fi
+
+if [ "$target" = global ]; then
+  dest_dir="$HOME/.claude/skills"
+else
+  if [ ! -d "$target" ]; then
+    echo "error: project path '$target' is not a directory" >&2
+    exit 1
+  fi
+  dest_dir="$(cd "$target" && pwd -P)/.claude/skills"
+fi
+
+dest="$dest_dir/$skill"
+
+if [ -L "$dest" ]; then
+  if [ "$(readlink -f "$dest")" = "$src" ]; then
+    echo "already installed: $dest -> $src"
+    exit 0
+  fi
+  echo "error: $dest is a symlink to $(readlink "$dest"), not to this repo" >&2
+  echo "remove it first if you want to replace it" >&2
+  exit 1
+elif [ -e "$dest" ]; then
+  echo "error: $dest already exists and is not a symlink" >&2
+  exit 1
+fi
+
+mkdir -p "$dest_dir"
+ln -s "$src" "$dest"
+echo "installed: $dest -> $src"
