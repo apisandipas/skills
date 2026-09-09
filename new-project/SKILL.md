@@ -130,10 +130,9 @@ closette itself.
 
 - `tsconfig.json` has only `strictNullChecks`. The scaffold uses `strict`,
   `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, and an `include`.
-- `package.json` has no `lint`, `format`, `typecheck`, `check`, or `start`
-  script, and carries a leftover `"main": "index.js"` and `"license": "ISC"`.
-- No formatter config, so format-on-save in Neovim falls back to the
-  language server instead of Prettier.
+- `package.json` has no `typecheck` or `start` script, and carries a leftover
+  `"main": "index.js"` and `"license": "ISC"`. (`lint`, `format`,
+  `format:check`, `check`, Prettier, CI, and a README were added 2026-09-09.)
 - `.env.example` lists three variables while `src/lib/env.ts` requires eight.
 - Two auth guards: `_protected.tsx` and `dashboard/route.tsx` both check the
   session, and the dashboard one drops the `redirect` search param. One guard
@@ -148,4 +147,3 @@ closette itself.
 - `z.string().uuid()` is the Zod 3 spelling; Zod 4 has `z.uuid()`.
 - `$id` route params are not validated; `params: { parse }` with a uuid schema
   turns a malformed id into a 404 instead of a database error.
-- No CI, no README.

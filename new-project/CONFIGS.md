@@ -155,8 +155,11 @@ dist
 .output
 .tanstack
 .nitro
+.direnv
 drizzle
+db
 src/routeTree.gen.ts
+package-lock.json
 ```
 
 `eslint-config-prettier` goes last in the ESLint config so no lint rule
@@ -265,29 +268,56 @@ services:
 
 ```yaml
 name: ci
+
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
   pull_request:
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
-        with: { node-version: 24, cache: npm }
+        with:
+          node-version: 24
+          cache: npm
+
       - run: npm ci
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run format:check
-      - run: npm test
-      - run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format
+        run: npm run format:check
+
+      # Tests run against the mocked db in src/test, so no Postgres service.
+      - name: Test
+        run: npm test
 ```
 
-Tests run against the mocked `db`, so CI needs no Postgres service. Add one
-only if integration tests appear.
+Steps mirror `npm run check` so a local pass predicts a green build. Add a
+Postgres service only if integration tests appear. closette's workflow is the
+same minus the typecheck step, because its tsconfig predates strict mode.
 
 ## README.md
 
-Short: what the app is, `nix-shell` or `direnv allow` to get Postgres, copy
-`.env.example` to `.env`, `npm install`, `npm run db:migrate`, `npm run dev`.
-Point at `db-dump` and `db-restore` for sharing dev data between machines.
+closette's README is the template. Sections, in order:
+
+1. One paragraph on what the app is and its two areas (user-facing, admin).
+2. **Stack** as a short bulleted list with links.
+3. **Getting started**: `direnv allow` or `nix-shell`, copy `.env.example`,
+   how to make `BETTER_AUTH_SECRET`, which keys need external accounts, then
+   `npm install`, `npm run db:migrate`, `npm run dev`. One line on the
+   docker-compose alternative.
+4. **Scripts** as a table, one row per `package.json` script.
+5. **Development database**: what `db/APP.sql` is, `db-dump`, `db-restore`,
+   and that auto-restore only happens into an empty database.
+6. **Layout**: a five-line tree of `src/` with one clause each, and the
+   sentence that every server function scopes by the session's `userId`.
+7. **Tests**: what is covered, that no database is needed, and what CI runs.
