@@ -1,13 +1,23 @@
 #!/usr/bin/env bash
 #
-# Symlink a skill from this repo into a Claude Code skills directory.
+# Install a skill from this repo where both Codex and Claude Code will see it.
 #
-#   ./install <skill> global          -> ~/.claude/skills/<skill>
-#   ./install <skill> <project-path>  -> <project-path>/.claude/skills/<skill>
+#   ./install <skill> global          -> ~/.agents/skills/<skill>
+#   ./install <skill> <project-path>  -> <project-path>/.agents/skills/<skill>
 #
-# The link points at the checkout, so editing a skill here updates every
-# place it is installed. Re-running is a no-op if the link is already right,
-# and an error if something else is already in the way.
+# Two links are made for each install:
+#
+#   <base>/.agents/skills/<skill>  ->  <this repo>/<skill>
+#   <base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
+#
+# .agents/skills is the shared location Codex reads. Claude Code reads
+# .claude/skills, so that one is a relative link over to .agents; a link to a
+# link resolves fine. Editing a skill here updates every place it is
+# installed.
+#
+# Re-running is a no-op if the links are already right. A link that resolves
+# to this repo's copy of the skill but by a different route (say, an older
+# direct link) is replaced. Anything else in the way is an error.
 
 set -euo pipefail
 
@@ -34,30 +44,43 @@ if [ ! -f "$src/SKILL.md" ]; then
 fi
 
 if [ "$target" = global ]; then
-  dest_dir="$HOME/.claude/skills"
+  base=$HOME
 else
   if [ ! -d "$target" ]; then
     echo "error: project path '$target' is not a directory" >&2
     exit 1
   fi
-  dest_dir="$(cd "$target" && pwd -P)/.claude/skills"
+  base=$(cd "$target" && pwd -P)
 fi
 
-dest="$dest_dir/$skill"
+# link DEST TARGET: make DEST a symlink to TARGET, or leave it alone if it
+# already is, or replace it if it is our own link by another route.
+link() {
+  local dest=$1 want=$2 have
 
-if [ -L "$dest" ]; then
-  if [ "$(readlink -f "$dest")" = "$src" ]; then
-    echo "already installed: $dest -> $src"
-    exit 0
+  if [ -L "$dest" ]; then
+    have=$(readlink "$dest")
+    if [ "$have" = "$want" ]; then
+      echo "ok:        $dest -> $want"
+      return
+    fi
+    if [ "$(readlink -f "$dest")" = "$src" ]; then
+      rm "$dest"
+      echo "replaced:  $dest (was -> $have)"
+    else
+      echo "error: $dest is a symlink to $have, not to this repo" >&2
+      echo "remove it first if you want to replace it" >&2
+      exit 1
+    fi
+  elif [ -e "$dest" ]; then
+    echo "error: $dest already exists and is not a symlink" >&2
+    exit 1
   fi
-  echo "error: $dest is a symlink to $(readlink "$dest"), not to this repo" >&2
-  echo "remove it first if you want to replace it" >&2
-  exit 1
-elif [ -e "$dest" ]; then
-  echo "error: $dest already exists and is not a symlink" >&2
-  exit 1
-fi
 
-mkdir -p "$dest_dir"
-ln -s "$src" "$dest"
-echo "installed: $dest -> $src"
+  mkdir -p "$(dirname "$dest")"
+  ln -s "$want" "$dest"
+  echo "installed: $dest -> $want"
+}
+
+link "$base/.agents/skills/$skill" "$src"
+link "$base/.claude/skills/$skill" "../../.agents/skills/$skill"

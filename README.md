@@ -20,10 +20,21 @@ skills/
 everywhere the skill is installed.
 
 ```sh
-./install my-network global             # -> ~/.claude/skills/my-network
-./install my-network ~/Dev/some-project # -> ~/Dev/some-project/.claude/skills/my-network
+./install my-network global             # user-wide
+./install my-network ~/Dev/some-project # one project
 ```
 
-Re-running is a no-op when the link is already correct. If something else is
-already at the destination the script stops and says so rather than replacing
-it.
+Each install makes two links, so both Codex and Claude Code find the skill:
+
+```
+<base>/.agents/skills/<skill>  ->  <this repo>/<skill>
+<base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
+```
+
+where `<base>` is `~` for `global` or the project directory otherwise.
+`.agents/skills` is the shared location Codex reads; `.claude/skills` is what
+Claude Code reads, so it gets a relative link over to `.agents`.
+
+Re-running is a no-op when the links are already correct. A link that already
+resolves to this repo's copy by a different route is replaced. Anything else
+already at a destination stops the script rather than being overwritten.
