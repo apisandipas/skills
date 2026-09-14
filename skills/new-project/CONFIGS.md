@@ -1,8 +1,7 @@
 # Config files
 
 Every file outside `src/`. Replace `APP` with the app name. Versions are not
-pinned here on purpose; install latest and consult closette's `package.json`
-if a combination misbehaves.
+pinned here on purpose; install latest.
 
 ## package.json
 
@@ -47,8 +46,9 @@ class-variance-authority clsx tailwind-merge lucide-react
 ```
 
 Only with uploads: `@aws-sdk/client-s3 @aws-sdk/s3-request-presigner react-dropzone`.
-Not by default: closette also has `masonic` (dashboard grid) and
-`react-colorful` (`ColorField`); add either when the app needs it.
+Only with user management: `mailtrap`.
+Not by default: `masonic` (masonry grid) and `react-colorful`
+(`ColorField`); add either when the app needs it.
 
 Dev dependencies:
 
@@ -223,8 +223,16 @@ BETTER_AUTH_URL=http://localhost:3000
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/APP
 ```
 
-Plus the five `B2_*` keys when uploads are on. Generate the secret with
-`openssl rand -base64 32`.
+Plus the five `B2_*` keys when uploads are on, and with user management:
+
+```
+MAILTRAP_TOKEN=
+MAILTRAP_FROM=noreply@APP.test
+MAILTRAP_USE_SANDBOX=false # true sends into a Mailtrap testing inbox
+MAILTRAP_INBOX_ID= # sandbox only
+```
+
+Generate the secret with `openssl rand -base64 32`.
 
 ## .gitignore
 
@@ -241,24 +249,105 @@ dist
 ## shell.nix and .envrc
 
 `.envrc` is one line: `use nix`. `shell.nix` pins a nixpkgs commit with
-`fetchTarball` so every machine gets the same Postgres major, and provides
-`nodejs` and `postgresql`. Its `shellHook`:
+`fetchTarball` so every machine gets the same Postgres major (keeps
+`pg_dump` output restorable across machines), starts Postgres on entry, and
+stops it on exit. Nothing dumps automatically: `db-dump` is run by hand, so a
+dump can never race a `git pull`.
 
-1. Sets `PGDATA=$PWD/.direnv/postgres`, `PGSOCK=$PWD/.direnv/postgres_sockets`,
-   `DATABASE_URL=postgres://postgres:postgres@localhost:5432/APP`, and
-   `DUMPFILE=$PWD/db/APP.sql`.
-2. Runs `initdb --auth=trust --no-locale -U postgres` on first entry and
-   points `unix_socket_directories` at `PGSOCK`.
-3. Starts Postgres with `pg_ctl -o "-k $PGSOCK" -l "$PGDATA/server.log" start`
-   and creates database `APP` if missing.
-4. Defines `db-dump` (pg_dump `--clean --if-exists`, excluding
-   `session` and `verification` table data, written to a temp file then moved
-   into place) and `db-restore` (psql `--single-transaction -v ON_ERROR_STOP=1`).
-5. Auto-restores the dump only when the database has zero public tables.
-6. Traps EXIT to `pg_ctl stop -m fast`.
+```nix
+{ pkgs ? import (fetchTarball {
+    # Pinned nixpkgs-unstable so both machines get identical postgres/node.
+    url = "https://github.com/NixOS/nixpkgs/archive/c27cdad491a991b11ed731760aa2ef8db0cb0410.tar.gz";
+    sha256 = "1r58xn9xdka8bw710i431srl3dmy7dyrhd32rjv709f2mkb6m1ix";
+  }) {} }:
 
-closette's `shell.nix` is the complete reference for this and can be copied
-with the database name changed.
+pkgs.mkShell {
+  buildInputs = [
+    pkgs.nodejs_24
+    pkgs.postgresql_16
+  ];
+
+  shellHook = ''
+    export PGDATA="$PWD/.direnv/postgres"
+    export PGSOCK="$PWD/.direnv/postgres_sockets"
+    # Change when 5432 is taken by a system-wide postgresql.service.
+    export PGPORT=5432
+    export DATABASE_URL="postgres://postgres:postgres@localhost:$PGPORT/APP"
+    # Absolute path, captured at entry, so the helpers work from any directory.
+    export DUMPFILE="$PWD/db/APP.sql"
+
+    mkdir -p "$PGDATA" "$PGSOCK"
+
+    if [ ! -d "$PGDATA/base" ]; then
+      echo "Initializing PostgreSQL database..."
+      initdb --auth=trust --no-locale -U postgres
+      echo "unix_socket_directories = '$PGSOCK'" >> "$PGDATA/postgresql.conf"
+    fi
+
+    echo "Starting PostgreSQL..."
+    pg_ctl -o "-k $PGSOCK -p $PGPORT" -l "$PGDATA/server.log" start
+
+    sleep 1
+    if ! psql -h localhost -U postgres -lqt | cut -d \| -f 1 | grep -qw APP; then
+      echo "Creating database 'APP'..."
+      createdb -h localhost -U postgres APP
+    fi
+
+    # Write the live database to db/APP.sql. Machine-local auth data stays
+    # out, and a failed pg_dump leaves the existing file untouched.
+    db-dump() {
+      echo "Dumping database to db/APP.sql..."
+      if pg_dump -h localhost -U postgres --clean --if-exists \
+           --exclude-table-data=public.session \
+           --exclude-table-data=public.verification \
+           APP > "$DUMPFILE.tmp"; then
+        mv "$DUMPFILE.tmp" "$DUMPFILE"
+        echo "Wrote db/APP.sql"
+      else
+        echo "pg_dump failed; keeping existing dump"
+        rm -f "$DUMPFILE.tmp"
+        return 1
+      fi
+    }
+
+    # Load db/APP.sql over the live database. The dump drops and recreates
+    # every table, so this replaces whatever is there now.
+    db-restore() {
+      if [ ! -f "$DUMPFILE" ]; then
+        echo "No db/APP.sql to restore"
+        return 1
+      fi
+      echo "Restoring database from db/APP.sql..."
+      if psql -h localhost -U postgres -d APP -v ON_ERROR_STOP=1 \
+           --single-transaction -f "$DUMPFILE" > /dev/null; then
+        echo "Restored."
+      else
+        echo "Restore failed; database left unchanged."
+        return 1
+      fi
+    }
+
+    # Auto-restore only into an empty database. If APP already holds tables,
+    # the live data may be newer than the file, so leave it alone.
+    PUBLIC_TABLES=$(psql -h localhost -U postgres -d APP -tAc \
+      "select count(*) from information_schema.tables where table_schema = 'public'" 2>/dev/null)
+    if [ -f "$DUMPFILE" ] && [ "$PUBLIC_TABLES" = "0" ]; then
+      db-restore
+    elif [ -f "$DUMPFILE" ]; then
+      echo "APP already has tables - skipping auto-restore."
+    fi
+
+    trap 'echo "Stopping PostgreSQL..."; pg_ctl stop -m fast' EXIT
+
+    echo ""
+    echo "Node.js version: $(node -v)"
+    echo "PostgreSQL:      Running on localhost:$PGPORT"
+    echo "Database URL:    $DATABASE_URL"
+    echo "db-dump          Write the live database to db/APP.sql"
+    echo "db-restore       Load db/APP.sql over the live database"
+  '';
+}
+```
 
 ## docker-compose.dev.yml
 
@@ -313,8 +402,7 @@ jobs:
 ```
 
 Steps mirror `npm run check` so a local pass predicts a green build. Add a
-Postgres service only if integration tests appear. closette's workflow is
-identical; its `typecheck` script runs `tsc --noEmit` rather than `tsgo`.
+Postgres service only if integration tests appear.
 
 ## render.yaml
 
@@ -361,6 +449,11 @@ services:
         sync: false
       - key: B2_REGION
         sync: false
+      # Only with user management:
+      - key: MAILTRAP_TOKEN
+        sync: false
+      - key: MAILTRAP_FROM
+        sync: false
 
 databases:
   - name: APP-db
@@ -383,7 +476,7 @@ Notes:
 
 ## README.md
 
-closette's README is the template. Sections, in order:
+Sections, in order:
 
 1. One paragraph on what the app is and its two areas (user-facing, admin).
 2. **Stack** as a short bulleted list with links.

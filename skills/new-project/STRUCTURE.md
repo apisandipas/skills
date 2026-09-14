@@ -1,8 +1,7 @@
 # Structure and plumbing
 
 The tree, then skeleton code for each plumbing file. The skeletons are the
-shape to reproduce, not verbatim copies of closette; fill in app names and
-drop what the app does not need.
+shape to reproduce; fill in app names and drop what the app does not need.
 
 ## Tree
 
@@ -33,20 +32,22 @@ drop what the app does not need.
     │   ├── ui/              # shadcn output plus data-table, confirm-dialog, toast, debounced-input
     │   ├── form/fields.tsx  # TextField, NumberField, SelectField, ImageField (uploads), SubmitButton
     │   ├── layout/page-container.tsx
-    │   ├── auth/            # login-form, signup-form
+    │   ├── auth/            # login-form, signup-form (+ forgot-password-form, reset-password-form)
     │   ├── admin/           # sidebar, new-button (only with an admin area)
     │   ├── theme-provider.tsx, theme-switcher.tsx
     │   ├── default-catch-boundary.tsx, not-found.tsx
     │   └── dev-tools.tsx    # TanStackDevtools with query, router, form, a11y panels; DEV only
     ├── features
     │   ├── common/index.ts  # searchFiltersSchema, Filters, makeKeys
+    │   ├── users/           # only with user management, see USER-MGMT.md
     │   └── <entity>/        # see FEATURE-SLICE.md
     │       ├── api/{service,queries,mutations,form,types}.ts (+ .test.ts)
     │       └── components/
     ├── lib
     │   ├── env.ts
     │   ├── db/{index,schema,auth-schema,<domain>-schema}.ts
-    │   ├── auth/{index,auth-client,functions}.ts
+    │   ├── auth/{index,auth-client,functions}.ts (+ roles.ts)
+    │   ├── mail.ts          # only with user management: Mailtrap sendMail()
     │   ├── query-client.ts
     │   ├── form.ts, form-context.ts
     │   ├── storage/         # only with uploads: index, constants, resize-image
@@ -54,11 +55,12 @@ drop what the app does not need.
     ├── routes
     │   ├── __root.tsx
     │   ├── index.tsx
-    │   ├── login.tsx, signup.tsx
+    │   ├── login.tsx, signup.tsx (+ forgot-password.tsx, reset-password.tsx)
     │   ├── api/auth/$.ts
     │   ├── _protected.tsx   # the one auth guard
     │   └── _protected/
     │       ├── dashboard/{route,index}.tsx
+    │       ├── users/{route,index,new}.tsx, users/$userId/edit.tsx   # see USER-MGMT.md
     │       └── admin/route.tsx, admin/<entity>/...   # see FEATURE-SLICE.md
     └── test/{setup,mocks}.ts
 ```
@@ -77,6 +79,10 @@ export const env = createEnv({
     // Only with uploads:
     // B2_KEY_ID: z.string(), B2_APP_KEY: z.string(), B2_BUCKET: z.string(),
     // B2_ENDPOINT: z.url(), B2_REGION: z.string(),
+    // Only with user management (see USER-MGMT.md):
+    // MAILTRAP_TOKEN: z.string(), MAILTRAP_FROM: z.email().default("noreply@APP.test"),
+    // MAILTRAP_USE_SANDBOX: z.stringbool().default(false),
+    // MAILTRAP_INBOX_ID: z.coerce.number().optional(),
   },
   clientPrefix: "VITE_",
   client: {},
@@ -160,6 +166,8 @@ export const auth = betterAuth({
   },
   plugins: [tanstackStartCookies()], // must stay last
 });
+// With user management: sendResetPassword, databaseHooks (first user is
+// admin), and admin() before tanstackStartCookies(). See USER-MGMT.md.
 
 // auth-client.ts - browser
 import { createAuthClient } from "better-auth/react";
@@ -325,6 +333,9 @@ vi.mock("@/lib/auth/functions", async () => ({
 }));
 // Only with uploads: services call storage directly, so it is a seam too.
 vi.mock("@/lib/storage", async () => (await import("./mocks")).storage);
+// Only with user management: the users service calls auth.api directly.
+vi.mock("@/lib/auth", async () => ({ auth: (await import("./mocks")).auth }));
+vi.mock("@tanstack/react-start/server", () => ({ getRequestHeaders: () => new Headers() }));
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => {
     let schema;

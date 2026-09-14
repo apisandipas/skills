@@ -1,0 +1,14 @@
+{
+  "lastChangelogVersion": "0.85.1",
+  "theme": "bryan-readable",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "packages": [
+    "npm:pi-mcp-adapter",
+    "npm:pi-web-access",
+    "npm:pi-powerline-footer",
+    "npm:pi-subagents",
+    "npm:pi-lens",
+    "npm:pi-rewind-unwind"
+  ]
+}

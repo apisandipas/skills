@@ -2,7 +2,8 @@
 
 One entity, called `thing` here, owned by a user, listed in an admin table
 with search and paging, created and edited in a route-driven modal. Work top
-to bottom; each step compiles on its own.
+to bottom; each step compiles on its own. The users entity is the exception:
+Better Auth owns its table and endpoints, so it follows USER-MGMT.md.
 
 ## 1. Table: src/lib/db/<domain>-schema.ts
 
@@ -176,7 +177,7 @@ regenerates, and commit `src/routeTree.gen.ts` with the feature.
 ## 8. Tests: src/features/things/api/service.test.ts
 
 Import `db` from `@/test/mocks` and call the server functions directly. The
-minimum set, mirroring closette:
+minimum set:
 
 - create saves `userId` from the session and ignores one in the request
 - update throws when no row matched, ignores `userId`, rejects a non-uuid id

@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
 #
-# Install a skill from this repo where Codex, pi, and Claude Code will all see it.
+# Install skills and pi config from this repo.
 #
-#   ./install <skill> global          -> ~/.agents/skills/<skill>
-#   ./install <skill> <project-path>  -> <project-path>/.agents/skills/<skill>
+#   ./install <skill> global          -> install one skill user-wide
+#   ./install <skill> <project-path>  -> install one skill for a project
+#   ./install all global              -> install every skill and pi config
+#   ./install all <project-path>      -> install every skill for a project
+#   ./install pi global               -> install pi config only
 #
-# Two links are made for each install:
-#
+# Skills:
 #   <base>/.agents/skills/<skill>  ->  <this repo>/skills/<skill>
 #   <base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
 #
-# .agents/skills is the shared location Codex and pi read. Claude Code reads
-# .claude/skills, so that one is a relative link over to .agents; a link to a
-# link resolves fine. Editing a skill here updates every place it is
-# installed.
+# pi config:
+#   ~/.pi/agent/settings.json       ->  <this repo>/configs/pi/agent/settings.json
+#   ~/.pi/agent/extensions/*        ->  <this repo>/configs/pi/agent/extensions/*
+#   ~/.pi/agent/themes/*            ->  <this repo>/configs/pi/agent/themes/*
 #
 # Re-running is a no-op if the links are already right. A link that resolves
-# to this repo's copy of the skill but by a different route (say, an older
-# direct link) is replaced, as is a dangling link. Anything else in the way
-# is an error.
+# to this repo's copy by a different route is replaced, as is a dangling link.
+# A regular file with the same content as the repo copy is adopted. Anything
+# else in the way is an error.
 
 set -euo pipefail
 
 usage() {
-  echo "usage: $0 <skill> (global | <project-path>)" >&2
+  cat >&2 <<EOF
+usage: $0 (<skill> | all | pi) (global | <project-path>)
+
+examples:
+  $0 my-network global
+  $0 all global
+  $0 new-project ~/Dev/some-project
+  $0 pi global
+EOF
   exit 2
 }
 
 [ $# -eq 2 ] || usage
 
-skill=$1
+what=$1
 target=$2
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-src="$repo/skills/$skill"
-
-if [ ! -f "$src/SKILL.md" ]; then
-  echo "error: no skill named '$skill' in $repo (expected $src/SKILL.md)" >&2
-  echo "available:" >&2
-  for d in "$repo"/skills/*/; do
-    [ -f "$d/SKILL.md" ] && echo "  $(basename "$d")" >&2
-  done
-  exit 1
-fi
 
 if [ "$target" = global ]; then
   base=$HOME
@@ -54,10 +54,8 @@ else
   base=$(cd "$target" && pwd -P)
 fi
 
-# link DEST TARGET: make DEST a symlink to TARGET, or leave it alone if it
-# already is, or replace it if it is our own link by another route.
-link() {
-  local dest=$1 want=$2 have
+link_path() {
+  local dest=$1 want=$2 own=${3:-$2} have
 
   if [ -L "$dest" ]; then
     have=$(readlink "$dest")
@@ -65,17 +63,25 @@ link() {
       echo "ok:        $dest -> $want"
       return
     fi
-    if [ ! -e "$dest" ] || [ "$(readlink -f "$dest")" = "$src" ]; then
+    if [ ! -e "$dest" ] || [ "$(readlink -f "$dest")" = "$own" ]; then
       rm "$dest"
       echo "replaced:  $dest (was -> $have)"
+    elif [ -f "$dest" ] && [ -f "$own" ] && cmp -s "$dest" "$own"; then
+      rm "$dest"
+      echo "adopted:   $dest (was -> $have)"
     else
       echo "error: $dest is a symlink to $have, not to this repo" >&2
       echo "remove it first if you want to replace it" >&2
       exit 1
     fi
   elif [ -e "$dest" ]; then
-    echo "error: $dest already exists and is not a symlink" >&2
-    exit 1
+    if [ -f "$dest" ] && [ -f "$own" ] && cmp -s "$dest" "$own"; then
+      rm "$dest"
+      echo "adopted:   $dest"
+    else
+      echo "error: $dest already exists and does not match this repo" >&2
+      exit 1
+    fi
   fi
 
   mkdir -p "$(dirname "$dest")"
@@ -83,5 +89,58 @@ link() {
   echo "installed: $dest -> $want"
 }
 
-link "$base/.agents/skills/$skill" "$src"
-link "$base/.claude/skills/$skill" "../../.agents/skills/$skill"
+list_skills() {
+  local d
+  for d in "$repo"/skills/*/; do
+    [ -f "$d/SKILL.md" ] && basename "$d"
+  done
+}
+
+install_skill() {
+  local skill=$1 src="$repo/skills/$skill"
+
+  if [ ! -f "$src/SKILL.md" ]; then
+    echo "error: no skill named '$skill' in $repo (expected $src/SKILL.md)" >&2
+    echo "available:" >&2
+    list_skills | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  link_path "$base/.agents/skills/$skill" "$src" "$src"
+  link_path "$base/.claude/skills/$skill" "../../.agents/skills/$skill" "$src"
+}
+
+install_pi() {
+  if [ "$target" != global ]; then
+    echo "error: pi config can only be installed with target 'global'" >&2
+    exit 1
+  fi
+
+  local src_root="$repo/configs/pi/agent" src rel
+  if [ ! -d "$src_root" ]; then
+    echo "error: no pi config found at $src_root" >&2
+    exit 1
+  fi
+
+  while IFS= read -r -d '' src; do
+    rel=${src#"$src_root"/}
+    link_path "$HOME/.pi/agent/$rel" "$src" "$src"
+  done < <(find "$src_root" -type f -print0 | sort -z)
+}
+
+case "$what" in
+  all)
+    while IFS= read -r skill; do
+      install_skill "$skill"
+    done < <(list_skills)
+    if [ "$target" = global ]; then
+      install_pi
+    fi
+    ;;
+  pi)
+    install_pi
+    ;;
+  *)
+    install_skill "$what"
+    ;;
+esac

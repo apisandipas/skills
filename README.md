@@ -1,44 +1,51 @@
 # skills
 
-Agent skills for Claude Code, Codex, and pi.
+Agent skills and pi config for Claude Code, Codex, and pi.
 
-Each skill lives in its own directory under `skills/` containing a `SKILL.md`
-with frontmatter (`name`, `description`) followed by the instructions the agent
-should follow.
+This repo is the source of truth. The installer symlinks files out of this
+checkout, so edits here show up wherever they are installed.
 
 ## Layout
 
 ```
+install
 skills/
-  install
-  skills/
-    <skill-name>/
-      SKILL.md
-      (optional supporting files)
+  <skill-name>/
+    SKILL.md
+    (optional supporting files)
+configs/
+  pi/
+    agent/
+      settings.json
+      extensions/
+      themes/
 ```
 
 ## Installing
 
-`./install` symlinks a skill out of this checkout, so edits here show up
-everywhere the skill is installed.
-
 ```sh
-./install my-network global             # user-wide
-./install my-network ~/Dev/some-project # one project
+./install all global                  # user-wide skills plus pi config
+./install my-network global           # one skill, user-wide
+./install my-network ~/Dev/some-app   # one skill for one project
+./install pi global                   # pi config only
 ```
 
-Each install makes two links, so Codex, pi, and Claude Code all find the skill:
+Skill installs make these links:
 
 ```
 <base>/.agents/skills/<skill>  ->  <this repo>/skills/<skill>
 <base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
 ```
 
-where `<base>` is `~` for `global` or the project directory otherwise.
-`.agents/skills` is the shared location Codex and pi both read; `.claude/skills` is what
-Claude Code reads, so it gets a relative link over to `.agents`.
+where `<base>` is `~` for `global` or the project dir otherwise.
+`.agents/skills` is the shared skill dir. `.claude/skills` points at it for
+Claude Code.
 
-Re-running is a no-op when the links are already correct. A link that already
-resolves to this repo's copy by a different route is replaced, as is a dangling
-link. Anything else already at a destination stops the script rather than being
+pi config installs make links under `~/.pi/agent/` for files in
+`configs/pi/agent/`, including `settings.json`, `extensions/*`, and `themes/*`.
+State files such as auth, model cache, and sessions stay outside the repo.
+
+Re-running is a no-op when links are already right. The installer adopts a
+regular file, or an older link, when its content matches the repo copy.
+Anything else already at a destination stops the script rather than being
 overwritten.

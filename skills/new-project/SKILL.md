@@ -5,10 +5,8 @@ description: Scaffold a new full-stack TypeScript web app the way Bryan builds t
 
 # new-project
 
-The reference app is `~/Dev/closette` (private repo
-`apisandipas/closette`). This skill is the distilled version of it, with the
-gaps fixed. When the two disagree, follow this skill; closette is the worked
-example, not the spec.
+This skill is the spec. Do not go looking for a reference app; everything
+needed to scaffold is in these files.
 
 Three supporting files hold the detail. Read the one you need rather than all
 three:
@@ -19,6 +17,10 @@ three:
 - [FEATURE-SLICE.md](FEATURE-SLICE.md) - the recipe for one CRUD feature, from
   schema to routes to tests. Use this on its own when adding a feature to an
   existing app.
+- [USER-MGMT.md](USER-MGMT.md) - roles through the Better Auth admin
+  plugin, an admin-only users page reached from the user dropdown, and email
+  password reset through Mailtrap. Optional; also the recipe for adding it to
+  an existing app.
 - [CONFIGS.md](CONFIGS.md) - every config file: package.json scripts,
   tsconfig, vite, vitest, eslint, prettier, drizzle, env example, nix shell,
   docker-compose, GitHub Actions.
@@ -32,7 +34,8 @@ three:
 | Data | TanStack Query | `queryOptions` factories, key factory per feature, SSR integration |
 | Forms | TanStack Form | `createFormHook` with app-wide field components |
 | Tables | TanStack Table | Behind one `DataTable` component |
-| Auth | Better Auth | Email and password, 12 character minimum, Drizzle adapter, `tanstackStartCookies` plugin last. Optional invite-only signup |
+| Auth | Better Auth | Email and password, 12 character minimum, Drizzle adapter, `tanstackStartCookies` plugin last. Optional invite-only signup. Optional `admin` plugin for roles and a users page |
+| Email (optional) | Mailtrap SDK | Server-only `src/lib/mail.ts`; password reset is the first use. Sandbox mode for local |
 | Database | Drizzle ORM on Postgres | `postgres` driver, `drizzle-kit` migrations committed |
 | Validation | Zod 4 | `drizzle-zod` derives insert/select/update schemas from tables |
 | Env | `@t3-oss/env-core` | Fails at boot when a variable is missing |
@@ -46,8 +49,7 @@ three:
 | Storage (optional) | Backblaze B2 through the S3 SDK | Presigned PUT, `HEAD` to verify before trusting a key |
 | Deploy | Render from a committed `render.yaml` | `nitro` Vite plugin, `NITRO_PRESET=render-com`, migrations in `preDeployCommand` |
 
-Pin nothing in this skill. Install latest at scaffold time; closette's
-`package.json` is the compatibility reference if something breaks.
+Pin nothing in this skill. Install latest at scaffold time.
 
 ## Scaffold procedure
 
@@ -57,8 +59,9 @@ Work through these in order. Each step should leave `npm run check` passing.
    Postgres database name (use the app name), whether image uploads are
    needed (adds B2 and the storage module), whether signup is invite-only
    (the first account bootstraps, after that only a signed-in user can add
-   one), and whether there is an admin area as well as a user-facing one
-   (closette has all of these).
+   one), whether there is an admin area as well as a user-facing one, and
+   whether the app manages users (roles, a users page, password reset email;
+   see USER-MGMT.md).
 2. **Init the repo and toolchain.** `git init -b main`, then write every file
    in CONFIGS.md. Run `npm install` for the dependency list there. Commit as
    "Scaffold toolchain".
@@ -69,15 +72,19 @@ Work through these in order. Each step should leave `npm run check` passing.
    `src/routes/__root.tsx`, `src/routes/_protected.tsx`, and
    `src/routes/api/auth/$.ts`. Generate the Better Auth tables with
    `npx @better-auth/cli generate` into `src/lib/db/auth-schema.ts`, then
-   `npm run db:generate && npm run db:migrate`. Commit as "Add auth, db, router".
+   `npm run db:generate && npm run db:migrate`. With user management, add
+   `mail.ts`, `roles.ts`, the admin plugin, and its columns first (USER-MGMT.md
+   steps 1 to 4) so the migration lands once. Commit as "Add auth, db, router".
 5. **Shell UI.** `npx shadcn@latest init` with the `components.json` from
    CONFIGS.md, then add: button, card, dialog, alert-dialog, dropdown-menu,
    field, input, label, popover, separator, table, tabs. Write the shared
    components listed in STRUCTURE.md (theme provider, toast, confirm dialog,
    data table, page container, catch boundary, not found, dev tools). Add
-   login and signup routes and forms. Commit as "Add UI shell and auth pages".
+   login and signup routes and forms, plus the forgot and reset password
+   routes when there is user management. Commit as "Add UI shell and auth
+   pages".
 6. **First feature.** Follow FEATURE-SLICE.md once for the app's main entity.
-   Commit per feature.
+   Commit per feature. The users feature follows USER-MGMT.md instead.
 7. **CI and deploy.** The workflow in CONFIGS.md runs check on every push and
    PR. Push to GitHub with `gh repo create --private --source=. --push`. The
    `render.yaml` in CONFIGS.md is already in the repo with the app name filled
@@ -112,8 +119,8 @@ Work through these in order. Each step should leave `npm run check` passing.
   `list(filters)`, `details()`, `detail(id)` following the tkdodo pattern.
 - **Forms through `useAppForm`.** Field components (`TextField`,
   `NumberField`, `SelectField`, and `ImageField` with uploads) and
-  `SubmitButton` are registered once in `src/lib/form.ts`. closette also has
-  a `ColorField` on `react-colorful`; add one only when the app needs it.
+  `SubmitButton` are registered once in `src/lib/form.ts`. A `ColorField` on
+  `react-colorful` is optional; add one only when the app needs it.
   Feature forms use `withForm` with a shared `formOptions` so the modal and
   the fields agree on defaults and the Zod validator.
 - **Schemas derive from tables.** `createInsertSchema`, `createSelectSchema`,
@@ -130,6 +137,17 @@ Work through these in order. Each step should leave `npm run check` passing.
   question for the `/signup` route's `beforeLoad`, which redirects to `/login`
   when closed. Never move `/signup` under `_protected`: that blocks the first
   signup. A signed-in user adds an account by visiting `/signup`.
+- **Roles come from the admin plugin, not a column you manage.** `ROLES` in
+  `src/lib/auth/roles.ts` is the one list; the first account is made admin by
+  a `databaseHooks.user.create.before` hook; the users service calls
+  `auth.api.*` with the request headers so Better Auth does the admin check.
+- **User management is not part of the admin area.** The admin sidebar lists
+  the product's entities. The users page lives at `/users` with its own
+  header, guarded on `context.user.role`, and is reached from the user
+  dropdown, shown only to admins.
+- **Password reset is email-driven.** `sendResetPassword` in `betterAuth()`
+  mails the link; `/forgot-password` and `/reset-password` stay public. An
+  admin can also send one from the users table.
 - **Password minimum is 12 on both sides.** `minPasswordLength: 12` in
   `betterAuth()` and `z.string().min(12)` in the login and signup forms.
 - **Generated files are committed and ignored by tools.** `src/routeTree.gen.ts`
@@ -138,34 +156,3 @@ Work through these in order. Each step should leave `npm run check` passing.
   `src/lib/auth/index.ts`, `src/lib/storage`, and `src/lib/env` are imported
   only from server functions and route `server` handlers. The client talks to
   auth through `src/lib/auth/auth-client.ts`.
-
-## Gaps closette has that the scaffold fixes
-
-Apply these when scaffolding, and offer them as a follow-up when working in
-closette itself.
-
-- `tsconfig.json` has only `strictNullChecks`. The scaffold uses `strict`,
-  `noUncheckedIndexedAccess`, `verbatimModuleSyntax`, and an `include`.
-- `package.json` carries a leftover `"main": "index.js"` and
-  `"license": "ISC"`. (`start`, `engines`, `typecheck`, `lint`, `format`,
-  `format:check`, `check`, Prettier, CI, `render.yaml`, and a README were all
-  in place by 2026-09-13.)
-- `.env.example` lists three variables while `src/lib/env.ts` requires eight.
-- Three auth guards: `_protected.tsx`, `dashboard/route.tsx`, and
-  `admin/index.tsx` all check the session, and the last two drop the
-  `redirect` search param. One guard at `_protected` is enough; children read
-  `context.user`.
-- `betterAuth()` is not handed `secret` and `baseURL` from the validated env,
-  and `trustedOrigins` reads `process.env.BETTER_AUTH_URL!` directly. A
-  missing `BETTER_AUTH_SECRET` is caught by env validation but Better Auth
-  would still fall back to reading `process.env` on its own.
-- The server requires 12 character passwords; both auth forms still say 8, so
-  a short password gets a server error instead of a field message.
-- `shell.nix` names the database `dev_db` and `docker-compose.dev.yml` names it
-  `closette`. Pick the app name for both. The shell also runs Postgres on
-  5433 because 5432 is taken on one machine.
-- There is no `.envrc`, so `direnv allow` in the README does nothing; it is
-  `nix-shell` by hand.
-- `z.string().uuid()` is the Zod 3 spelling; Zod 4 has `z.uuid()`.
-- `$id` route params are not validated; `params: { parse }` with a uuid schema
-  turns a malformed id into a 404 instead of a database error.
