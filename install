@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install a skill from this repo where both Codex and Claude Code will see it.
+# Install a skill from this repo where Codex, pi, and Claude Code will all see it.
 #
 #   ./install <skill> global          -> ~/.agents/skills/<skill>
 #   ./install <skill> <project-path>  -> <project-path>/.agents/skills/<skill>
@@ -10,7 +10,7 @@
 #   <base>/.agents/skills/<skill>  ->  <this repo>/skills/<skill>
 #   <base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
 #
-# .agents/skills is the shared location Codex reads. Claude Code reads
+# .agents/skills is the shared location Codex and pi read. Claude Code reads
 # .claude/skills, so that one is a relative link over to .agents; a link to a
 # link resolves fine. Editing a skill here updates every place it is
 # installed.

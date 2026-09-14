@@ -1,6 +1,6 @@
 # skills
 
-Agent skills for Claude Code.
+Agent skills for Claude Code, Codex, and pi.
 
 Each skill lives in its own directory under `skills/` containing a `SKILL.md`
 with frontmatter (`name`, `description`) followed by the instructions the agent
@@ -27,7 +27,7 @@ everywhere the skill is installed.
 ./install my-network ~/Dev/some-project # one project
 ```
 
-Each install makes two links, so both Codex and Claude Code find the skill:
+Each install makes two links, so Codex, pi, and Claude Code all find the skill:
 
 ```
 <base>/.agents/skills/<skill>  ->  <this repo>/skills/<skill>
@@ -35,7 +35,7 @@ Each install makes two links, so both Codex and Claude Code find the skill:
 ```
 
 where `<base>` is `~` for `global` or the project directory otherwise.
-`.agents/skills` is the shared location Codex reads; `.claude/skills` is what
+`.agents/skills` is the shared location Codex and pi both read; `.claude/skills` is what
 Claude Code reads, so it gets a relative link over to `.agents`.
 
 Re-running is a no-op when the links are already correct. A link that already
