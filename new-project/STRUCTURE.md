@@ -20,6 +20,7 @@ drop what the app does not need.
 ├── drizzle.config.ts
 ├── eslint.config.ts
 ├── package.json
+├── render.yaml              # Render blueprint: web service + Postgres
 ├── shell.nix                # node + postgres, starts postgres on entry
 ├── tsconfig.json
 ├── vite.config.ts
@@ -30,7 +31,7 @@ drop what the app does not need.
     ├── styles.css           # tailwind, shadcn tokens, fonts
     ├── components
     │   ├── ui/              # shadcn output plus data-table, confirm-dialog, toast, debounced-input
-    │   ├── form/fields.tsx  # TextField, NumberField, SelectField, ColorField, ImageField, SubmitButton
+    │   ├── form/fields.tsx  # TextField, NumberField, SelectField, ImageField (uploads), SubmitButton
     │   ├── layout/page-container.tsx
     │   ├── auth/            # login-form, signup-form
     │   ├── admin/           # sidebar, new-button (only with an admin area)
@@ -130,17 +131,33 @@ for optional links between domain tables.
 
 ```ts
 // index.ts - server only
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { count } from "drizzle-orm";
 import { db } from "@/lib/db";
+import { user } from "@/lib/db/auth-schema";
 import { env } from "@/lib/env";
 
 export const auth = betterAuth({
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
+  trustedOrigins: [env.BETTER_AUTH_URL],
   database: drizzleAdapter(db, { provider: "pg" }),
-  emailAndPassword: { enabled: true },
+  emailAndPassword: { enabled: true, minPasswordLength: 12 },
+  // Only when signup is invite-only. The first account is allowed because
+  // nothing else could create it; after that a session is required.
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+      const existing = (await db.select({ value: count() }).from(user))[0]?.value ?? 0;
+      if (existing === 0) return;
+      if (!(await getSessionFromCtx(ctx))) {
+        throw new APIError("FORBIDDEN", { message: "APP is invite-only." });
+      }
+    }),
+  },
   plugins: [tanstackStartCookies()], // must stay last
 });
 
@@ -157,6 +174,13 @@ export const ensureSession = createServerFn({ method: "GET" }).handler(async () 
   const session = await auth.api.getSession({ headers: getRequestHeaders() });
   if (!session) throw new Error("Unauthorized");
   return session;
+});
+
+// Only when signup is invite-only: the same rule as the hook, for the route.
+export const isSignupOpen = createServerFn({ method: "GET" }).handler(async () => {
+  if (await auth.api.getSession({ headers: getRequestHeaders() })) return true;
+  const existing = (await db.select({ value: count() }).from(user))[0]?.value ?? 0;
+  return existing === 0;
 });
 ```
 
@@ -231,7 +255,20 @@ export const Route = createFileRoute("/_protected")({
 ```
 
 `/login` validates `search` with `z.object({ redirect: z.string().optional() })`
-and navigates to `search.redirect ?? "/dashboard"` after sign-in.
+and navigates to `search.redirect ?? "/dashboard"` after sign-in. Both auth
+forms validate `password` with `z.string().min(12, ...)` to match the server.
+
+When signup is invite-only, `/signup` stays outside `_protected` (the first
+signup has no session) and guards itself:
+
+```ts
+export const Route = createFileRoute("/signup")({
+  beforeLoad: async () => {
+    if (!(await isSignupOpen())) throw redirect({ to: "/login" });
+  },
+  component: SignupPage,
+});
+```
 
 ## src/lib/form.ts and form-context.ts
 
@@ -244,7 +281,7 @@ export const { fieldContext, formContext, useFieldContext, useFormContext } =
 export const { useAppForm, withForm } = createFormHook({
   fieldContext,
   formContext,
-  fieldComponents: { TextField, NumberField, SelectField, ColorField, ImageField },
+  fieldComponents: { TextField, NumberField, SelectField, ImageField },
   formComponents: { SubmitButton },
 });
 ```
@@ -279,13 +316,15 @@ export const makeKeys = (name: string) => {
 
 ## src/test
 
-`setup.ts` mocks three seams and the server-function builder:
+`setup.ts` mocks the seams and the server-function builder:
 
 ```ts
 vi.mock("@/lib/db", async () => ({ db: (await import("./mocks")).db }));
 vi.mock("@/lib/auth/functions", async () => ({
   ensureSession: vi.fn(async () => (await import("./mocks")).session),
 }));
+// Only with uploads: services call storage directly, so it is a seam too.
+vi.mock("@/lib/storage", async () => (await import("./mocks")).storage);
 vi.mock("@tanstack/react-start", () => ({
   createServerFn: () => {
     let schema;
@@ -303,6 +342,10 @@ beforeEach(() => vi.clearAllMocks());
 `delete`, `where`, `select`, `from` all return the chain; `returning` is the
 leaf you resolve) plus `db.query.<table>.{findFirst,findMany}` per table, and
 `session = { user: { id: "u1" } }`. Add a `query` entry for each new table.
+With uploads it also exports `storage = { presignUpload: vi.fn(),
+presignDownload: vi.fn(), verifyUpload: vi.fn(), deleteImage: vi.fn(async
+() => {}) }`, so a service test can resolve `storage.verifyUpload` to `false`
+and assert the row was never written.
 
 ## Optional: src/lib/storage
 

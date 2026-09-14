@@ -11,6 +11,7 @@ if a combination misbehaves.
   "name": "APP",
   "private": true,
   "type": "module",
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
@@ -38,19 +39,22 @@ react react-dom
 @tanstack/react-devtools @tanstack/react-router-devtools
 @tanstack/react-query-devtools @tanstack/react-form-devtools @tanstack/devtools-a11y
 better-auth @better-auth/drizzle-adapter
-drizzle-orm drizzle-zod postgres zod @t3-oss/env-core dotenv
+drizzle-orm drizzle-zod postgres zod @t3-oss/env-core
+nitro
 tailwindcss @tailwindcss/vite tw-animate-css shadcn @base-ui/react
 class-variance-authority clsx tailwind-merge lucide-react
 @fontsource-variable/inter @fontsource-variable/space-grotesk
 ```
 
 Only with uploads: `@aws-sdk/client-s3 @aws-sdk/s3-request-presigner react-dropzone`.
+Not by default: closette also has `masonic` (dashboard grid) and
+`react-colorful` (`ColorField`); add either when the app needs it.
 
 Dev dependencies:
 
 ```
 typescript @typescript/native-preview @types/node @types/react @types/react-dom
-vite @vitejs/plugin-react vitest jiti
+vite @vitejs/plugin-react vitest jiti dotenv
 eslint @eslint/js typescript-eslint eslint-plugin-react globals @tanstack/eslint-plugin-router
 eslint-config-prettier prettier prettier-plugin-tailwindcss drizzle-kit
 ```
@@ -83,14 +87,20 @@ import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { nitro } from "nitro/vite";
 
 export default defineConfig({
   server: { port: 3000 },
   resolve: { tsconfigPaths: true },
+  // nitro first so `vite build` writes .output/ for the host preset.
   // React's plugin must come after Start's.
-  plugins: [tailwindcss(), tanstackStart(), viteReact()],
+  plugins: [nitro(), tailwindcss(), tanstackStart(), viteReact()],
 });
 ```
+
+`vite build` writes `.output/server/index.mjs` and `.output/public`, which
+is what the `start` script runs. Without the nitro plugin the build lands in
+`dist/` and `start` fails.
 
 ## vitest.config.ts
 
@@ -179,8 +189,9 @@ export default defineConfig({
 });
 ```
 
-`dotenv` is a declared dependency. drizzle-kit runs outside Vite, so nothing
-else loads `.env` for it.
+`dotenv` is a declared dev dependency. drizzle-kit runs outside Vite, so
+nothing else loads `.env` for it. On Render the variables are injected, and
+`dotenv/config` is a no-op when there is no `.env` file.
 
 ## components.json
 
@@ -304,6 +315,71 @@ jobs:
 Steps mirror `npm run check` so a local pass predicts a green build. Add a
 Postgres service only if integration tests appear. closette's workflow is
 identical; its `typecheck` script runs `tsc --noEmit` rather than `tsgo`.
+
+## render.yaml
+
+One web service and one Postgres, committed so the topology is reproducible.
+`APP` is replaced with the app name at scaffold time like every other file
+here, and `OWNER` with the GitHub owner from `gh repo create`.
+
+```yaml
+services:
+  - type: web
+    name: APP
+    runtime: node
+    repo: https://github.com/OWNER/APP
+    plan: starter
+    region: ohio
+    branch: main
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NITRO_PRESET
+        value: render-com
+      - key: HOST
+        value: "0.0.0.0"
+      - key: NODE_VERSION
+        value: "24"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: APP-db
+          property: connectionString
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # Only with uploads:
+      - key: B2_KEY_ID
+        sync: false
+      - key: B2_APP_KEY
+        sync: false
+      - key: B2_BUCKET
+        sync: false
+      - key: B2_ENDPOINT
+        sync: false
+      - key: B2_REGION
+        sync: false
+
+databases:
+  - name: APP-db
+    region: ohio
+    plan: basic-256mb
+    postgresMajorVersion: "17"
+```
+
+Notes:
+
+- `preDeployCommand` runs `drizzle-kit`, a dev dependency. Render's `npm ci`
+  installs dev dependencies unless `NODE_ENV=production` is set, so do not
+  set it. A failed migration fails the deploy before the new build serves.
+- `BETTER_AUTH_URL` is `sync: false` because it is the real `https://`
+  origin, known only once the service exists. Set it in the dashboard before
+  the first deploy: `src/lib/env.ts` crashes the boot when it is missing.
+- Add `domains: [APP.example]` under the service for a custom domain.
+- Free tiers expire (Postgres after 30 days) and cold-start; `starter` and
+  `basic-256mb` are the smallest tiers that stay up.
 
 ## README.md
 
