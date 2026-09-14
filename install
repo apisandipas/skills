@@ -7,7 +7,7 @@
 #
 # Two links are made for each install:
 #
-#   <base>/.agents/skills/<skill>  ->  <this repo>/<skill>
+#   <base>/.agents/skills/<skill>  ->  <this repo>/skills/<skill>
 #   <base>/.claude/skills/<skill>  ->  ../../.agents/skills/<skill>
 #
 # .agents/skills is the shared location Codex reads. Claude Code reads
@@ -17,7 +17,8 @@
 #
 # Re-running is a no-op if the links are already right. A link that resolves
 # to this repo's copy of the skill but by a different route (say, an older
-# direct link) is replaced. Anything else in the way is an error.
+# direct link) is replaced, as is a dangling link. Anything else in the way
+# is an error.
 
 set -euo pipefail
 
@@ -32,12 +33,12 @@ skill=$1
 target=$2
 
 repo=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-src="$repo/$skill"
+src="$repo/skills/$skill"
 
 if [ ! -f "$src/SKILL.md" ]; then
   echo "error: no skill named '$skill' in $repo (expected $src/SKILL.md)" >&2
   echo "available:" >&2
-  for d in "$repo"/*/; do
+  for d in "$repo"/skills/*/; do
     [ -f "$d/SKILL.md" ] && echo "  $(basename "$d")" >&2
   done
   exit 1
@@ -64,7 +65,7 @@ link() {
       echo "ok:        $dest -> $want"
       return
     fi
-    if [ "$(readlink -f "$dest")" = "$src" ]; then
+    if [ ! -e "$dest" ] || [ "$(readlink -f "$dest")" = "$src" ]; then
       rm "$dest"
       echo "replaced:  $dest (was -> $have)"
     else
