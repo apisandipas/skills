@@ -166,8 +166,6 @@ closette itself.
   5433 because 5432 is taken on one machine.
 - There is no `.envrc`, so `direnv allow` in the README does nothing; it is
   `nix-shell` by hand.
-- `src/features/brands/api/mutation.ts` is singular; every other feature has
-  `mutations.ts`. (Renamed locally on 2026-09-14, uncommitted.)
 - `z.string().uuid()` is the Zod 3 spelling; Zod 4 has `z.uuid()`.
 - `$id` route params are not validated; `params: { parse }` with a uuid schema
   turns a malformed id into a 404 instead of a database error.
