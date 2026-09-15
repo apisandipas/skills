@@ -29,7 +29,9 @@ nothing here can drift.
 3. Follow "Getting started" in the README: nix shell, `.env`, migrate, dev.
 4. Commit as "Start <name> from tanstack-template".
 5. Add the first entity with `docs/FEATURE-SLICE.md`. Read
-   `docs/CONVENTIONS.md` before writing code.
+   `docs/CONVENTIONS.md` before writing code. For anything larger than one
+   slice, write `docs/specs/<feature>.md` from `docs/specs/TEMPLATE.md` and
+   review it with Bryan before building.
 
 ## Add a feature to an existing app
 
