@@ -97,7 +97,9 @@ list_skills() {
 }
 
 install_skill() {
-  local skill=$1 src="$repo/skills/$skill"
+  local skill src
+  skill=$1
+  src="$repo/skills/$skill"
 
   if [ ! -f "$src/SKILL.md" ]; then
     echo "error: no skill named '$skill' in $repo (expected $src/SKILL.md)" >&2
