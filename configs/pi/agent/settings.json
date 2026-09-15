@@ -9,6 +9,10 @@
     "npm:pi-powerline-footer",
     "npm:pi-subagents",
     "npm:pi-lens",
-    "npm:pi-rewind-unwind"
-  ]
+    "npm:pi-rewind-unwind",
+    "npm:pi-markdown-box",
+    "npm:@juicesharp/rpiv-todo",
+    "npm:pi-cc-extensions"
+  ],
+  "tuiMode": "fullscreen"
 }
