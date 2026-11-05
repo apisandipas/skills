@@ -5,8 +5,8 @@ description: Scaffold a new full-stack TypeScript web app the way Bryan builds t
 
 # new-project
 
-The template repo is the spec: `apisandipas/tanstack-template` on GitHub,
-checked out locally at `~/Dev/skilltest`. It is a small working app, its CI
+The template repo is the spec: `apisandipas/tanstack-template` on GitHub
+(private). It is a small working app, its CI
 runs the scaffold script on every push, and its `docs/` folder holds the
 conventions and the feature recipe. Nothing in this skill duplicates it, so
 nothing here can drift.
@@ -30,15 +30,22 @@ nothing here can drift.
 4. Commit as "Start <name> from tanstack-template".
 5. Add the first entity with `docs/FEATURE-SLICE.md`. Read
    `docs/CONVENTIONS.md` before writing code. For anything larger than one
-   slice, write `docs/specs/<feature>.md` from `docs/specs/TEMPLATE.md` and
+   slice, write `docs/specs/<feature>.org` from `docs/specs/TEMPLATE.org` and
    review it with Bryan before building.
 
 ## Add a feature to an existing app
 
 Read the app's own `docs/FEATURE-SLICE.md` and `docs/CONVENTIONS.md`; they
 match that app's version of the pattern. An app that predates the template
-has no `docs/`; use the copies in `~/Dev/skilltest/docs` and note the
-differences.
+has no `docs/`; read the template's copies and note the differences:
+
+```sh
+gh api repos/apisandipas/tanstack-template/contents/docs/FEATURE-SLICE.md --jq .content | base64 -d
+gh api repos/apisandipas/tanstack-template/contents/docs/CONVENTIONS.md --jq .content | base64 -d
+```
+
+`~/Dev/skilltest` is a legacy example app from before the template. Do not
+use it as a reference.
 
 ## Change the pattern
 
